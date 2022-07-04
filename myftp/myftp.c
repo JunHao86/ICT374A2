@@ -1,6 +1,6 @@
 /*	Filename: myftp.c
  *	Author: Emmanuel Lim, Daniel Khoo
- *	Date (of finalized update): 04/07/22
+ *	Date (of finalized update): TBD
  *  Description: Assignment 2 - Simple File Transfer Protocol - Client Program
  */
 
@@ -19,7 +19,7 @@
 
 #define SERV_TCP_PORT 40004 //Listening TCP Port Number
 #define BUFSIZE         256
-#define MAX_NUM_TOKENS  2   //Token 1 : Command name
+#define MAX_TOKENS        2 //Token 1 : Command name
                             //Token 2 : Filename/Pathname (if using cd,lcd,get,put)
 
 //================================================================
@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
     int sd;
     int length;
     char buf[BUFSIZE],host[60];
-    char *tokenArray[MAX_NUM_TOKENS];
+    char *tokenArray[MAX_TOKENS];
 
     struct sockaddr_in ser_addr; 
     struct hostent *hp;
@@ -55,8 +55,10 @@ int main(int argc, char *argv[])
         gethostname(host, sizeof(host));
     else if (argc == 2) // use the given hostname
         strcpy(host, argv[1]);
-    else {
-        printf("Usage: %s [<server_host_name>]\n", argv[0]); exit(1); 
+    else 
+    {
+        printf("Usage: %s [<server_host_name>]\n", argv[0]); 
+        exit(1); 
     }
 
     // getting host address, building server socket address
@@ -92,7 +94,8 @@ int main(int argc, char *argv[])
         }      
         tokenise(buf,tokenArray);
 
-        //if-else statements for functions (pwd,lpwd,dir,ldir,cd,lcd,get,put,quit)
+        //if-else statements for functions 
+        //(pwd,lpwd,dir,ldir,cd,lcd,get,put,quit)
         if(strcmp(tokenArray[0],"quit")==0)
         {
             printf("Terminating myftp session\n");
