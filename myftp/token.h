@@ -1,18 +1,19 @@
-/*	File: token.h
- *	Author: Emmanuel
- *	Date: 23/06/22
- *	Revised: 23/06/22
+/*	Filename: token.h
+ *	Author: Emmanuel Lim, Daniel Khoo
+ *	Date (of finalized update): 04/07/22
+ *  Description: Tokeniser to split a line into several character tokens
  */
 
 #define MAX_NUM_TOKENS  100
-//white space, tab and newline for separating
-#define tokenSeparators " \t\n"    
+#define tokenSeparators " \t\n" //white space, tab and newline for separating
 
-// note:
-//		If return value ntokens >= 0, then token[ntokens] is set to NULL. 
-
-//takes a line and splits it into several character tokens
-//address to first letter in token are then stored in an array
-//separator followed with null character
+/*
+ * Takes a line and splits it into several character tokens
+ * Uses tokenSeparators to determine when to split the line into tokens
+ * Returns  - Description
+ * >=0      - Number of tokens from the command line
+ * -1       - Failure
+ * Notes    - If return value ntokens >= 0, then token[ntokens] is set to NULL. 
+ */
 int tokenise (char line[], char *token[]);
 

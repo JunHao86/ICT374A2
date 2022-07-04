@@ -1,7 +1,7 @@
-/*	File: token.c
- *	Author: Emmanuel
- *	Date: 23/06/22
- *	Revised: 23/06/22
+/*	Filename: token.c
+ *	Author: Emmanuel Lim, Daniel Khoo
+ *	Date (of finalized update): 04/07/22
+ *  Description: Tokeniser to split a line into several character tokens
  */
 
 #include <string.h>
