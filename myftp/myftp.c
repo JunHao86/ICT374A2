@@ -17,7 +17,7 @@
 
 //================================================================
 
-#define SERV_TCP_PORT 40004 //Listening TCP Port Number
+#define SERV_TCP_PORT 40228 //Assigned Listening TCP Port Number
 #define BUFSIZE         256
 #define MAX_TOKENS        2 //Token 1 : Command name
                             //Token 2 : Filename/Pathname (if using cd,lcd,get,put)
@@ -28,7 +28,6 @@
  * To do list
  * 1. Write functions for client commands
  * 2. Uncheck dirent.h    sys/stat.h    fcntl.h if necessary 
- * 3. Get allocated port number
  */
 
 //================================================================
@@ -80,7 +79,7 @@ int main(int argc, char *argv[])
     client program from here
     */
 
-    while(1) // should we use while loop or switch-case?
+    while(1) 
     {
         printf(">   "); //display prompt
         fgets(buf,sizeof(buf),stdin);
@@ -95,7 +94,6 @@ int main(int argc, char *argv[])
         tokenise(buf,tokenArray);
 
         //if-else statements for functions 
-        //(pwd,lpwd,dir,ldir,cd,lcd,get,put,quit)
         if(strcmp(tokenArray[0],"quit")==0)
         {
             printf("Terminating myftp session\n");
@@ -103,34 +101,42 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(tokenArray[0],"pwd")==0)
         {
+            printf("pwd session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"lpwd")==0)
         {
+            printf("lpwd session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"dir")==0)
         {
+            printf("dir session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"ldir")==0)
         {
+            printf("ldir session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"cd")==0)
         {
+            printf("cd session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"lcd")==0)
         {
+            printf("lcd session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"get")==0)
         {
+            printf("get session\n");
             //function here
         }
         else if(strcmp(tokenArray[0],"put")==0)
         {
+            printf("put session\n");
             //function here
         }
         else
