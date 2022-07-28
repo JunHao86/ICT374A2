@@ -9,51 +9,134 @@
 #include  <netinet/in.h> /* struct sockaddr_in, htons(), htonl(), */
 #include  "stream.h"
 
-/*
- * To do list
- * 1. Edit stream to be compliant with myftp.c and myftpd.c
- */
+//================================================================
 
-
-int readn(int fd, char *buf, int bufsize)
+int readn(int sd, char *buf, int bytesize)
 {
-    short data_size;    /* sizeof (short) must be 2 */ 
-    int n, nr, len;
+    int n,nread = 0;
 
-    /* check buffer size len */
-    if (bufsize < MAX_BLOCK_SIZE)
-         return (-3);     /* buffer too small */
-
-    /* get the size of data sent to me */
-    if (read(fd, (char *) &data_size, 1) != 1) return (-1);
-    if (read(fd, (char *) (&data_size)+1, 1) != 1) return (-1);
-    len = (int) ntohs(data_size);  /* convert to host byte order */ 
-
-    /* read len number of bytes to buf */
-    for (n=0; n < len; n += nr) {
-        if ((nr = read(fd, buf+n, len-n)) <= 0) 
-            return (nr);       /* error in reading */
+    if (bytesize < MAX_BLOCK_SIZE)
+    {
+        return (-3);     //buffer too small
     }
-    return (len); 
+
+    for(n=0;n<bytesize;n+=nread)
+    {
+        if((nread=read(sd,buf+n,bytesize-n)) < 0)
+        {
+            return(nread); //error in reading
+        }
+    }
+    return n;
 }
 
-int writen(int fd, char *buf, int nbytes)
+int writen(int sd, char *buf, int bytesize)
 {
-    short data_size = nbytes;     /* short must be two bytes long */
-    int n, nw;
+    int n,nwrite = 0;
 
-    if (nbytes > MAX_BLOCK_SIZE) 
-         return (-3);    /* too many bytes to send in one go */ 
+    if (bytesize > MAX_BLOCK_SIZE)
+    { 
+        return (-3);    // too many bytes to send in one go
+    }
 
-    /* send the data size */
-    data_size = htons(data_size);  
-    if (write(fd, (char *) &data_size, 1) != 1) return (-1);      
-    if (write(fd, (char *) (&data_size)+1, 1) != 1) return (-1);       
+    for(n=0;n<bytesize;n+=nwrite)
+    {
+        if((nwrite = write(sd,buf+n,bytesize-n)) < 0)
+        {
+            return(nwrite); //error in writing
+        }
+    }
+    return n;
+}
 
-    /* send nbytes */
-    for (n=0; n<nbytes; n += nw) {
-         if ((nw = write(fd, buf+n, nbytes-n)) <= 0)  
-             return (nw);    /* write error */
+int read_onebyte_length(int sd, char *opcode)
+{
+    char c;
+    
+    if (read(sd,(char *)&opcode, 1) != 1)
+    {
+        return (-1);
+    }
+
+    *opcode = c;
+    return 1;
+}
+
+int write_onebyte_length(int sd,char opcode)
+{
+    if (write(sd,(char *)&opcode, 1) != 1)
+    {
+        return (-1);
+    }
+    
+    return 1;
+}
+
+int read_twobyte_length(int sd, int *length)
+{
+	short data = 0; //short = 2 bytes long
+
+    if (read(sd, &data, 2) != 2)
+    {
+        return (-1);
+    }
+
+    //receiving end, processes into host byte order 
+    int hbo = (int)ntohs(data);
+    *length = hbo;
+
+	return 1;
+}
+
+int write_twobyte_length(int sd, int length)
+{
+	short data = length; //short = 2 bytes long
+    //sending end, processes into network byte order
+	data = htons(data);
+
+    if(length > MAX_BLOCK_SIZE)
+    {
+        return (-2); //too many bytes to send in a single sequence
+    }
+
+	if (write(sd,&data, 2) != 2) 
+    {
+        return (-1);
+    }
+    
+	return 1;
+}
+
+int read_fourbyte_length(int sd, int *length)
+{
+	int data = 0; //int = 4 bytes long
+
+    if (read(sd, &data, 4) != 4) 
+    {
+        return (-1);
+    }
+    
+    //receiving end, processes into host byte order 
+    int hbo = ntohl(data); 
+    *length = hbo;
+
+	return 1;
+}
+
+int write_fourbyte_length(int sd, int length)
+{
+	//sending end, processes into network byte order
+    int data = htonl(length); 
+
+    if(length > MAX_BLOCK_SIZE)
+    {
+        return (-2); //too many bytes to send in a single sequence
+    }
+
+	if (write(sd,&data, 4) != 4)
+    {
+        return (-1);
     } 
-    return (n);
+
+	return 1;
 }

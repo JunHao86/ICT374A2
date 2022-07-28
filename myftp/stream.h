@@ -7,24 +7,6 @@
 #define MAX_BLOCK_SIZE (1024*5)    /* maximum size of any piece of */
                                    /* data that can be sent by client */
 
-/*
- * To do list
- * 1. Edit stream to be compliant with myftp.c and myftpd.c
- */
-
-/*
- * purpose:  read a stream of bytes from "fd" to "buf".
- * pre:      1) size of buf bufsize >= MAX_BLOCK_SIZE,
- * post:     1) buf contains the byte stream; 
- *           2) return value > 0   : number ofbytes read
- *                           = 0   : connection closed
- *                           = -1  : read error
- *                           = -2  : protocol error
- *                           = -3  : buffer too small
- */           
-int readn(int fd, char *buf, int bufsize);
-
-
 
 /*
  * purpose:  write "nbytes" bytes from "buf" to "fd".
@@ -33,6 +15,39 @@ int readn(int fd, char *buf, int bufsize);
  *           2) return value = nbytes : number ofbytes written
  *                           = -3     : too many bytes to send 
  *                           otherwise: write error
- */           
-int writen(int fd, char *buf, int nbytes);
+ */   
+
+
+//================================================================
+
+
+/*
+ * Pairs of read-write functions for data on a socket, between client and server
+ * 1. readn 
+ *    writen
+ *    Function:
+ * 
+ * 2. read_onebyte_length  
+ *    write_onebyte_length
+ *    Function: 
+ * 
+ * 3. read_twobyte_length  
+ *    write_twobyte_length
+ *    Function: 
+ * 
+ * 4. read_fourbyte_length  
+ *    write_fourbyte_length
+ *    Function: 
+ */
+int readn(int sd, char *buf, int bytesize);
+int writen(int sd, char *buf, int bytesize);
+
+int read_onebyte_length(int sd, char *opcode);
+int write_onebyte_length(int sd,char opcode);
+
+int read_twobyte_length(int sd, int *length);
+int write_twobyte_length(int sd, int length);
+
+int read_fourbyte_length(int sd, int *length);
+int write_fourbyte_length(int sd, int length);
 
