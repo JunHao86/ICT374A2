@@ -13,7 +13,8 @@
 #include  <sys/socket.h>
 #include  <unistd.h>    
 #include  <dirent.h>           /* client commands dir, ldir */
-#include  "token.h"            /* client commands cd,lcd,get,put */            
+#include  "token.h"            /* client commands cd,lcd,get,put */  
+#include  "stream.h"          
 
 //================================================================
 
@@ -25,8 +26,7 @@
 
 /*
  * To do list
- * 1. Write functions for client-server commands
- * 2. Uncheck dirent.h    sys/stat.h    fcntl.h if necessary 
+ * 1. Uncheck   sys/stat.h    fcntl.h if necessary 
  */
 
 //================================================================
@@ -101,19 +101,147 @@ void func_lcd(char* token1)
  *               the client to the current directory of the remove server
  */
 
-void func_pwd(int sd, char* token)
+void func_pwd(int sd)
 {
+    printf("pwd session\n");
 
+    char opcode;
+    int size;
+
+    //Client > Server
+    if(write_onebyte_length(sd,'A') == -1)
+    {
+        perror("pwd: opcode write failed\n");
+        return;
+    }
+
+    //Server > Client
+    if(read_onebyte_length(sd,&opcode) == -1)
+    {
+        perror("pwd: opcode read invalid\n");
+        return;
+    }
+
+    if(opcode!='A')
+    {
+        perror("pwd: mismatched opcode\n");
+        return;
+    }
+
+    if(read_twobyte_length(sd,&size)==-1)
+    {
+        perror("pwd: filesize read invalid\n");
+        return;
+    }
+    
+    char server_cwd[size+1];
+
+    if(readn(sd,server_cwd,size)==-1)
+    {
+        perror("pwd: directory read fail\n");
+    }
+
+    server_cwd[size] = '\0';
+    printf("%s\n",server_cwd);
 }
 
-void func_dir(int sd, char* token)
+void func_dir(int sd)
 {
+    printf("dir session\n");
+    
+    char opcode;
+    int size;
 
+    //Client > Server
+    if(write_onebyte_length(sd,'B') == -1)
+    {
+        perror("dir: opcode write failed\n");
+        return;
+    }
+
+    //Server > Client
+    if(read_onebyte_length(sd,&opcode) == -1)
+    {
+        perror("dir: opcode read invalid\n");
+        return;
+    }
+
+    if(opcode!='B')
+    {
+        perror("dir: mismatched opcode\n");
+        return;
+    }
+
+	if(read_fourbyte_length(sd, &size) == -1){
+		perror("dir: filesize read invalid\n");
+		return;
+	}
+
+    char server_cwd[size+1];
+
+    if(readn(sd,server_cwd,size)==-1)
+    {
+        perror("dir: directory read fail\n");
+    }
+
+    server_cwd[size] = '\0';
+    printf("%s\n",server_cwd);
 }
 
-void func_cd(int sd, char* token)
+void func_cd(int sd, char* token1)
 {
+    printf("cd session\n");
 
+    char opcode,opcode2; //second opcode to determine successful directory change
+    int token_length = strlen(token1);
+
+    //Client > Server
+    if(write_onebyte_length(sd,'C') == -1)
+    {
+        perror("cd: opcode write failed\n");
+        return;
+    }
+
+    if(write_twobyte_length(sd,token_length)==-1)
+    {
+        perror("cd: directory length write invalid\n");
+        return;
+    }
+
+    if(writen(sd,token1,strlen(token1)) == -1)
+    {
+        perror("cd: directory name write invalid\n");
+    }
+
+    //Server > Client
+    if(read_onebyte_length(sd,&opcode) ==-1)
+    {
+        perror("cd: opcode read invalid\n");
+        return;
+    }
+
+    if(opcode!='C')
+    {
+        perror("cd: mismatched opcode\n");
+        return;
+    }
+
+    if(read_onebyte_length(sd,&opcode2) ==-1)
+    {
+        perror("cd: opcode2 read invalid\n");
+        return;
+    }
+
+    if(opcode2 == '0')
+    {
+        printf("cd: directory change successful\n");
+        return;
+    }
+    else if(opcode2 == '1')
+    {
+        perror("cd: server unable to find and change directory\n");
+        return;
+    }
 }
 
 void func_get(int sd, char* filename)
@@ -197,8 +325,7 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(tokenArray[0],"pwd")==0) //server side command 1
         {
-            printf("pwd session\n");
-            //function here
+            func_pwd(sd);
         }
         else if(strcmp(tokenArray[0],"lpwd")==0) 
         {
@@ -206,8 +333,7 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(tokenArray[0],"dir")==0) //server side command 2
         {
-            printf("dir session\n");
-            //function here
+            func_dir(sd);
         }
         else if(strcmp(tokenArray[0],"ldir")==0) 
         {
@@ -215,8 +341,7 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(tokenArray[0],"cd")==0) //server side command 3
         {
-            printf("cd session\n");
-            //function here
+            func_cd(sd,tokenArray[1]);
         }
         else if(strcmp(tokenArray[0],"lcd")==0) 
         {
