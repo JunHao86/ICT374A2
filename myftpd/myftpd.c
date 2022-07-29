@@ -1,6 +1,6 @@
 /*	Filename: myftpd.c
  *	Author: Emmanuel Lim, Daniel Khoo
- *	Date (of finalized update): TBD
+ *	Date (of finalized update): 30/7/22
  *  Description: Assignment 2 - Simple File Transfer Protocol - Server Program
  */
 
@@ -17,9 +17,10 @@
 #include  <unistd.h> 
 #include  <sys/stat.h>
 #include  <fcntl.h>
-/*
+#include "stream.h"
 #include <dirent.h>
 
+/*
 #include <time.h>
 #include <stdarg.h>
 #include <signal.h>
@@ -98,30 +99,180 @@ void logger(char* log, char* description)
         exit(1);
     }
     fprintf(logfile,"%s",description);
-    fprintf(logfile,"\n");
     fflush(logfile);
 }
 
-void serve_a_client(int sd)
-{   int nr,nw; 
-    char buf[FILE_BLOCK_SIZE];
+//================================================================
 
-    while (1)
+void serve_pwd(char* log,int sd)
+{
+    logger(log,"opcode for PWD function received\n");
+
+    char working_directory[FILE_BLOCK_SIZE];
+    //gets "/" only, child process from shell
+    //how to get actual cwd?
+    getcwd(working_directory,sizeof(working_directory)); 
+    logger(log,working_directory);
+    logger(log,"\n");
+
+    //Server > Client
+    if(write_onebyte_length(sd,'A') == -1)
     {
-        /* read data from client */
-        if ((nr = read(sd, buf, sizeof(buf))) <= 0)
-        {
-            exit(0);   /* connection broken down */
-        }
-            
-        /* ================= process data =================== */
-        buf[nr] = '\0';
-        //reverse(buf);
-              
-        /* send results to client */
-        nw = write(sd, buf, nr);
-    } 
+        logger(log,"opcode write failed\n");
+        return;
+    }
+
+    if(write_twobyte_length(sd,strlen(working_directory)) == -1)
+    {
+        logger(log,"length write failed\n");
+        return;
+    }
+
+    if(writen(sd,working_directory,strlen(working_directory))== -1)
+    {
+        logger(log,"failed to write directory\n");
+        return;
+    }
+
+    logger(log,"PWD function successful\n");
 }
+
+void serve_dir(char* log,int sd)
+{
+    logger(log,"opcode for DIR function received\n");
+    
+    DIR *dir;
+	struct dirent *directory;
+    char working_directory[FILE_BLOCK_SIZE];
+
+    if ((dir = opendir("."))!= NULL)
+    {
+        while((directory = readdir(dir))!=NULL)
+        {
+            strcat(working_directory,directory->d_name);
+            strcat(working_directory,"\n");
+        }
+        //end of while loop
+        working_directory[strlen(working_directory)-1] = '\0';
+        closedir(dir);
+        logger(log,"closedir successful\n");
+    }
+    else
+    {
+        logger(log,"DIR function dirent error");
+    }
+
+    if(write_onebyte_length(sd,'B') == -1)
+    {
+        logger(log,"opcode write failed\n");
+        return;
+    }
+
+    if(write_fourbyte_length(sd,strlen(working_directory)) == -1)
+    {
+        logger(log,"length write failed\n");
+        return;
+    }
+
+    if(writen(sd,working_directory,strlen(working_directory))== -1)
+    {
+        logger(log,"failed to write list of files in cwd\n");
+        return;
+    }
+
+    logger(log,"DIR function successful\n");
+}
+
+void serve_cd(char* log,int sd)
+{
+    logger(log,"opcode for CD function received\n");
+
+    int token_size; 
+    char opcode2; //second opcode to determine successful directory change
+    
+
+    //Client > Server
+    if(read_twobyte_length(sd,&token_size) == -1)
+    {
+        logger(log,"token length read failed\n");
+        return;
+    }
+
+    char token[token_size+1];
+
+    if(readn(sd,token,token_size) == -1)
+    {
+        logger(log,"token directory path read failed\n");
+        return;
+    }
+    
+    token[token_size] = '\0';
+
+    //Directory change
+    if(chdir(token) == 0)
+    {
+        opcode2 = '0';
+        logger(log,"directory changed\n");
+    }
+    else
+    {
+        opcode2 = '1';
+        logger(log,"failed to find and change directory\n");
+    }
+
+    //Server > Client
+    if(write_onebyte_length(sd,'C') == -1)
+    {
+        logger(log,"opcode write failed\n");
+        return;
+    }
+
+    if(write_onebyte_length(sd,opcode2) == -1)
+    {
+        logger(log,"opcode2 write failed\n");
+        return;
+    } 
+
+    logger(log,"CD function successful\n");
+}
+
+
+void serve_a_client(char* log, int sd)
+{   
+    char opcode;
+    logger(log,"connected to client\n");
+
+    //Client > Server
+	while (read_onebyte_length(sd,&opcode) > 0){
+
+		switch(opcode){
+			case 'A':
+                serve_pwd(log,sd);
+			    break;
+			case 'B':
+                serve_dir(log,sd);
+                break;
+			case 'C':
+                serve_cd(log,sd);
+                break;
+			case 'D':
+                logger(log,"dir cmd received\n");
+                //function here
+                break;
+			case 'E':
+                logger(log,"cd cmd received\n");
+                //function here
+                break;
+			default:
+				logger(log,"invalid opcode recieved\n");
+			    break;
+		}
+	}
+	logger(log,"disconnected\n");
+	return;
+}
+
+//================================================================
 
 /*
 No. of args - Description
@@ -133,7 +284,7 @@ argc == 2   - User specifies initial current directory
 int main(int argc, char *argv[])
 {
     pid_t pid;
-    int sd,nsd; //what is the purpose of n?
+    int sd,nsd;
     socklen_t cli_addrlen;
     struct sockaddr_in ser_addr, cli_addr;
     unsigned short port = SERV_TCP_PORT;
@@ -162,63 +313,64 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    /* setting path for logfile */
+    //setting path for logfile
     getcwd(current_directory,sizeof(current_directory));
     strcpy(logfile,current_directory);
     strcat(logfile,LOGPATH); //e.g. "./myftpd.log" , "./home/myftpd.log"
 
-    /*announces whenever program is started up, prevents confusion across clients*/
+    //announces whenever program is started up, prevents confusion across clients*/
     logger(logfile,"\n======Welcome to myftpd======\n"); 
     
 
-    /* turn the program into a daemon */
+    //turn the program into a daemon
     daemon_init(); 
 
-    logger(logfile,"Server initialized");
+    logger(logfile,"Server initialized\n");
     
     //logger(logfile,"initial directory set to %s", current_directory);
+    //unusable as logger is now changed to accept a predefined string
 
-    /* set up listening socket sd */
+    //set up listening socket sd
     if ((sd = socket(PF_INET, SOCK_STREAM, 0)) < 0) 
     {
         perror("server: socket error");
         exit(1);
     } 
 
-    /* build server Internet socket address */
+    //build server Internet socket address
     bzero((char *)&ser_addr, sizeof(ser_addr));
     ser_addr.sin_family = AF_INET;
     ser_addr.sin_port = htons(port);
     ser_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
 
-    /* bind server address to socket sd */
+    //bind server address to socket sd
     if (bind(sd, (struct sockaddr *) &ser_addr, sizeof(ser_addr))<0)
     {
         perror("server: bind failure"); 
         exit(1);
     }
 
-    /* become a listening socket */
+    //become a listening socket
     listen(sd, 5);
     
 
     while (1) {
 
-        /* wait to accept a client request for connection */
+        //wait to accept a client request for connection
         cli_addrlen = sizeof(cli_addr);
         nsd = accept(sd, (struct sockaddr *) &cli_addr, (socklen_t *)&cli_addrlen);
         if (nsd < 0) 
         {
-            if (errno == EINTR) /* if interrupted by SIGCHLD */
+            if (errno == EINTR) //if interrupted by SIGCHLD
             {
                 continue;
             }   
             perror("server: accept error"); 
             exit(1);
         }
-        logger(logfile,"Now listening to a client");
+        logger(logfile,"Now listening to a client\n");
 
-        /* create a child process to handle this client */
+        //create a child process to handle this client
         if ((pid=fork()) <0) 
         {
             perror("fork"); 
@@ -227,13 +379,14 @@ int main(int argc, char *argv[])
         else if (pid > 0) 
         { 
             close(nsd);
-            continue; /* parent to wait for next client */
+            continue; //parent to wait for next client
         }
 
-        /* now in child, serve the current client */
+        //now in child, serve the current client
         close(sd); 
-        serve_a_client(nsd);
-        logger(logfile,"Child has finished serving the client");
+        sd = nsd;
+        serve_a_client(logfile,nsd);
+        logger(logfile,"Child has finished serving the client\n");
         exit(0);
     }
 }
