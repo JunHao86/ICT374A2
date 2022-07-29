@@ -11,19 +11,19 @@
  * Pairs of read-write functions for data on a socket, between client and server
  * 1. readn 
  *    writen
- *    Function:
+ *    Function: Used for reading/writing a sequence of N bytes
  * 
  * 2. read_onebyte_length  
  *    write_onebyte_length
- *    Function: 
+ *    Function: Used for reading/writing one byte (opcode)
  * 
  * 3. read_twobyte_length  
  *    write_twobyte_length
- *    Function: 
+ *    Function: Used for reading/writing two bytes (short value)
  * 
  * 4. read_fourbyte_length  
  *    write_fourbyte_length
- *    Function: 
+ *    Function: Used for reading/writing four bytes (integer value)
  */
 int readn(int sd, char *buf, int bytesize);
 int writen(int sd, char *buf, int bytesize);
