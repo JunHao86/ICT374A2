@@ -10,21 +10,14 @@
 #include  <sys/socket.h>       /* struct sockaddr, socket(), etc */
 #include  <signal.h>           /* SIGCHLD, sigaction() */
 #include  <sys/wait.h>         /* waitpid(), WNOHAND */
-
 #include  <stdio.h>   
 #include  <stdlib.h>    
 #include  <string.h>
 #include  <unistd.h> 
 #include  <sys/stat.h>
 #include  <fcntl.h>
-#include "stream.h"
-#include <dirent.h>
-
-/*
-#include <time.h>
-#include <stdarg.h>
-#include <signal.h>
-*/
+#include  <dirent.h>           /* client commands dir, ldir */
+#include  "stream.h"           /* read-write commands for nbyte/one-byte/two-byte/four-byte */
 
 //================================================================
 
@@ -32,24 +25,6 @@
 #define FILE_BLOCK_SIZE 512  
 #define SERV_TCP_PORT 40228 // Assigned Listening TCP Port Number
 #define LOGPATH "/myftpd.log" //Logfile for daemon process
-
-//================================================================
-
-/*
- * Done
- * 1. Function - claim_children()
- * 2. Function - daemon_init()
- * 3. File directory setting
- * 4. Standard server stuff - adapted from ser6.c
- * 5. Function - logger()
- */
-
-/*
- * To do list
- * 1. Functions - serve_a_client()
- * 2. Write any other functions if required
- * 3. Uncheck any headers if necessary 
- */
 
 //================================================================
 
@@ -236,6 +211,213 @@ void serve_cd(char* log,int sd)
     logger(log,"CD function successful\n");
 }
 
+void serve_get(char* log,int sd)
+{
+    logger(log,"opcode for GET function received\n");
+
+    int filename_length;
+    int filesize;
+    int fd;
+    struct stat f;
+    char opcode2;
+    int nr = 0;
+    char buffer[MAX_BLOCK_SIZE];
+
+    //Client > Server
+    if(read_twobyte_length(sd,&filename_length) == -1)
+    {
+        logger(log,"filename length read failed\n");
+        return;
+    }
+
+    char filename[filename_length+1];
+
+    if(readn(sd,filename,filename_length) == -1)
+    {
+        logger(log,"filename read failed\n");
+        return;
+    }
+    
+    filename[filename_length] = '\0';
+
+    //verifying file before it gets sent out to client
+    //file must be in same directory as server working directory
+    if((fd=open(filename, O_RDONLY)) == -1)
+    {
+        opcode2 = 0;
+        logger(log,"file does not exist in current directory\n");
+        //Server > Client (E)
+        if(write_onebyte_length(sd,'E') == -1)
+        {
+            logger(log,"open: opcode (E) write failed\n");
+            return;
+        }
+        if(write_onebyte_length(sd,opcode2) == -1)
+        {
+            logger(log,"opcode2 (0) write failed\n");
+        } 
+        return;
+    }
+    if(fstat(fd,&f) < 0)
+    {
+        opcode2 = 1;
+        logger(log,"fstat error\n");
+        //Server > Client (E)
+        if(write_onebyte_length(sd,'E') == -1)
+        {
+            logger(log,"fstat: opcode (E) write failed\n");
+            return;
+        }
+        if(write_onebyte_length(sd,opcode2) == -1)
+        {
+            logger(log,"opcode2 (1) write failed\n");
+        } 
+        return;
+    }
+    filesize = (int)f.st_size; 
+    lseek(fd,0,SEEK_SET);
+
+    //successful so far, file exists
+    if(write_onebyte_length(sd,'D') == -1)
+    {
+        logger(log,"opcode write failed\n");
+        return;
+    }
+
+    if(write_fourbyte_length(sd,filesize) == -1)
+    {
+        logger(log,"filesize write failed\n");
+        return;
+    }
+
+    //Writing file to server
+    while((nr = read(fd,buffer,MAX_BLOCK_SIZE)) > 0)
+    {
+        if(writen(sd,buffer,nr) == -1)
+        {
+            logger(log,"failed to send contents of file \n");
+            return;
+        }
+    }
+
+    logger(log,"GET function successful\n");
+}
+
+
+void serve_put(char* log,int sd)
+{
+    logger(log,"opcode for PUT function received\n");
+
+    int filename_length;
+    int filesize;
+    int fd; 
+    char opcode,opcode2; //second opcode to determine if server accepts/rejects file
+
+    //Client > Server
+    if(read_twobyte_length(sd,&filename_length) == -1)
+    {
+        logger(log,"filename length read failed\n");
+        return;
+    }
+
+    char filename[filename_length+1];
+
+    if(readn(sd,filename,filename_length) == -1)
+    {
+        logger(log,"filename read failed\n");
+        return;
+    }
+    
+    filename[filename_length] = '\0';
+
+    //verifying if file exists in current working directory of server program
+    //if file does not exist, we can accept the file from client program
+    if((fd = open(filename,O_RDONLY)) != -1)
+    {
+        logger(log,"file with specified name exists: ");
+        logger(log,filename);
+        logger(log,"\n");
+        opcode2 = 1;
+    }
+    else if ((fd = open(filename,O_WRONLY | O_CREAT, 0766)) == -1)
+    {
+        logger(log,"unable to create file with name: ");
+        logger(log,filename);
+        logger(log,"\n");
+        opcode2 = 2;
+    }
+    else
+    {
+        logger(log,"server can accept file\n");
+        opcode2 = 0;
+    }
+
+    //Server > Client
+    if(write_onebyte_length(sd,'F') == -1)
+    {
+        logger(log,"opcode write failed\n");
+        return;
+    }
+
+    if(write_onebyte_length(sd,opcode2) == -1)
+    {
+        logger(log,"opcode2 write failed\n");
+        return;
+    } 
+
+    //Client > Server    
+    if(read_onebyte_length(sd,&opcode) == -1)
+    {
+        logger(log,"opcode read failed\n");
+        return;
+    }
+
+    if(opcode != 'G')
+    {
+        logger(log,"mismatched opcode\n");
+        return;
+    }
+
+    if(read_fourbyte_length(sd,&filesize) == -1)
+    {
+        logger(log,"filesize read failed\n");
+    }
+
+    int fileblock_size = FILE_BLOCK_SIZE;
+    if(FILE_BLOCK_SIZE > filesize)
+    {
+        fileblock_size = filesize;
+    }    
+
+    char fbuf [fileblock_size];
+    int nr,nw = 0;
+
+    while (filesize > 0) 
+    {
+        if (fileblock_size > filesize)
+        {
+            fileblock_size = filesize;
+        }
+        if ((nr = readn(sd,fbuf,FILE_BLOCK_SIZE)) == -1)
+        {
+            logger(log,"file byte read failed\n");
+            close(fd);
+            return;
+        }
+        if ((nw = writen(fd,fbuf,nr)) < nr)
+        {
+            logger(log,"file byte write failed\n");
+            close(fd);
+            return;
+        }
+        filesize -= nw;
+    }
+    close(fd);
+    logger(log,"PUT function successful\n");
+}
+
+
+
 
 void serve_a_client(char* log, int sd)
 {   
@@ -255,14 +437,14 @@ void serve_a_client(char* log, int sd)
 			case 'C':
                 serve_cd(log,sd);
                 break;
-			case 'D':
-                logger(log,"dir cmd received\n");
-                //function here
+			case 'D': 
+                serve_get(log,sd);
                 break;
-			case 'E':
-                logger(log,"cd cmd received\n");
-                //function here
+            //opcode E reserved for get command
+			case 'F':
+                serve_put(log,sd);
                 break;
+            //opcode G reserved for put command
 			default:
 				logger(log,"invalid opcode recieved\n");
 			    break;
