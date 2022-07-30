@@ -1,6 +1,6 @@
 /*	Filename: myftp.c
  *	Author: Emmanuel Lim, Daniel Khoo
- *	Date (of finalized update): TBD
+ *	Date (of finalized update): 30/7/22
  *  Description: Assignment 2 - Simple File Transfer Protocol - Client Program
  */
 
@@ -12,22 +12,19 @@
 #include  <sys/types.h>        
 #include  <sys/socket.h>
 #include  <unistd.h>    
+#include  <fcntl.h>
 #include  <dirent.h>           /* client commands dir, ldir */
+#include  <sys/stat.h>          
 #include  "token.h"            /* client commands cd,lcd,get,put */  
-#include  "stream.h"          
+#include  "stream.h"           /* read-write commands for nbyte/one-byte/two-byte/four-byte */
 
 //================================================================
 
 #define SERV_TCP_PORT 40228 //Assigned Listening TCP Port Number
+#define FILE_BLOCK_SIZE 512
 #define BUFSIZE         256
 #define MAX_TOKENS        2 //Token 1 : Command name
                             //Token 2 : Filename/Pathname
-//================================================================
-
-/*
- * To do list
- * 1. Uncheck   sys/stat.h    fcntl.h if necessary 
- */
 
 //================================================================
 
@@ -245,13 +242,232 @@ void func_cd(int sd, char* token1)
 }
 
 void func_get(int sd, char* filename)
-{
+{    
+    printf("get session\n");
 
+    char opcode,opcode2; //second opcode to determine if server accepts/rejects file
+    int fd;
+    int filename_length = strlen(filename); //filename adapted from file to be downloaded
+    int filesize;
+
+
+    //verifying if file exists in current working directory of client program
+    //if file does not exist, we can accept the file from server program
+    if ((fd=open(filename, O_RDONLY)) != -1)
+    {
+        printf("file exists: %s\n",filename);
+        return;
+    }
+    else if ((fd=open(filename,O_RDWR | O_CREAT, 0766)) == -1)
+    {
+        perror("unable to create file with specified filename\n");
+        return;
+    }
+
+    //Client > Server
+    if(write_onebyte_length(sd,'D') == -1)
+    {
+        perror("get: opcode write failed\n");
+        return;
+    }
+
+    if(write_twobyte_length(sd,filename_length)==-1)
+    {
+        perror("get: filename length write invalid\n");
+        return;
+    }
+
+    if(writen(sd,filename,strlen(filename)) == -1)
+    {
+        perror("get: filename write invalid\n");
+        return;
+    } 
+
+    //Server > Client 
+    if(read_onebyte_length(sd,&opcode) ==-1) //receives D or E 
+    {
+        perror("get: opcode read invalid\n");
+        return;
+    }
+
+    //branching: if file is downloadable(D) or if encountered error(E)
+    if (opcode == 'E')
+    {
+        if(read_onebyte_length(sd,&opcode2) ==-1)
+        {
+            perror("get: opcode2 read invalid\n");
+            return;
+        } 
+
+        if(opcode2 == '0')
+        {
+            perror("get: file does not exist in server directory\n");
+            return;
+        }
+        else if(opcode2 == '1')
+        {
+            perror("get: file cannot be downloadable,etc\n");
+            return;
+        }
+        close(fd);
+        unlink(filename);
+        return;
+    }
+    else if (opcode != 'D')
+    {
+        perror("put: mismatched opcode\n");
+        close(fd);
+        return;
+    }
+    else //opcode == D  
+    {
+        if(read_fourbyte_length(sd, &filesize) == -1)
+        {
+            perror("get: filesize read invalid\n");
+            close(fd);
+            return;
+	    }
+
+        int fileblock_size = FILE_BLOCK_SIZE;
+        if(FILE_BLOCK_SIZE > filesize)
+        {
+            fileblock_size = filesize;
+        }    
+
+        char fbuf [fileblock_size];
+        int nr,nw = 0;
+
+        while (filesize > 0) 
+        {
+            if (fileblock_size > filesize)
+            {
+                fileblock_size = filesize;
+            }
+            if ((nr = readn(sd,fbuf,FILE_BLOCK_SIZE)) == -1)
+            {
+                perror("file byte read failed\n");
+                close(fd);
+                return;
+            }
+            if ((nw = writen(fd,fbuf,nr)) < nr)
+            {
+                perror("file byte write failed\n");
+                close(fd);
+                return;
+            }
+            filesize -= nw;
+        }
+        close(fd);
+        printf("get: file download successful\n");
+    }
+    close(fd);
 }
 
 void func_put(int sd, char* filename)
 {
+    printf("put session\n");
 
+    char opcode,opcode2; //second opcode to determine if server accepts/rejects file
+    int fd; 
+    int filename_length = strlen(filename);
+    int filesize;
+    struct stat f;
+    int nr = 0;
+    char buffer[MAX_BLOCK_SIZE];
+
+    //verifying file before it gets sent out to server
+    //file must be in same directory as client program
+    if((fd=open(filename, O_RDONLY)) == -1)
+    {
+        printf("file exists: %s\n",filename);
+        return;
+    }
+    if(fstat(fd,&f) < 0)
+    {
+        perror("put: fstat error before (1)");
+        return;
+    }
+    filesize = (int)f.st_size; 
+    lseek(fd,0,SEEK_SET);
+    
+    //Client > Server
+    if(write_onebyte_length(sd,'F') == -1)
+    {
+        perror("put: opcode write failed\n");
+        return;
+    }
+
+    if(write_twobyte_length(sd,filename_length)==-1)
+    {
+        perror("put: filename length write invalid\n");
+        return;
+    }
+
+    if(writen(sd,filename,strlen(filename)) == -1)
+    {
+        perror("put: filename write invalid\n");
+        return;
+    } 
+
+    //Server > Client
+    if(read_onebyte_length(sd,&opcode) ==-1)
+    {
+        perror("put: opcode read invalid\n");
+        return;
+    }
+
+    if(opcode!='F')
+    {
+        perror("put: mismatched opcode\n");
+        return;
+    }
+
+    if(read_onebyte_length(sd,&opcode2) ==-1)
+    {
+        perror("cd: opcode2 read invalid\n");
+        return;
+    }
+
+    if(opcode2 == '0')
+    {
+        printf("put: server can accept file\n");
+        return;
+    }
+    else if(opcode2 == '1')
+    {
+        perror("put: filename clash, server cannot accept file\n");
+        return;
+    }
+    else if(opcode2 == '2')
+    {
+        perror("put: file cannot be created, server cannot accept file\n");
+        return;
+    }
+
+    //Client > Server 
+    if(write_onebyte_length(sd,'G') == -1)
+    {
+        perror("put: opcode write failed\n");
+        return;
+    }
+
+    if(write_fourbyte_length(sd,filesize) == -1)
+    {
+        perror("put: filesize write failed\n");
+        return;
+    }
+
+    //Writing file to server
+    while((nr = read(fd,buffer,MAX_BLOCK_SIZE)) > 0)
+    {
+        if(writen(sd,buffer,nr) == -1)
+        {
+            perror("failed to send contents of file \n");
+            return;
+        }
+    }
+
+    printf("put: file upload successful\n");
 }
 
 //================================================================
@@ -349,13 +565,11 @@ int main(int argc, char *argv[])
         }
         else if(strcmp(tokenArray[0],"get")==0) //server side command 4
         {
-            printf("get session\n");
-            //function here
+            func_get(sd,tokenArray[1]);
         }
         else if(strcmp(tokenArray[0],"put")==0) //server side command 5
         {
-            printf("put session\n");
-            //function here
+            func_put(sd,tokenArray[1]);
         }
         else
         {
