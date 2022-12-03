@@ -10,13 +10,21 @@ Simple Network Protocol Specification
 -	Transferred files and original files must be identical in sizes and contents (checked using the diff command in terminal)
 -	Able to fulfill certain functions after a connection is established between the server and client, when an argument entered by the user is mapped to the given function, as seen in the table below:
 
-#	Command Name	              Description	Requirements
-1	pwd	                        Display the current directory of server that is serving the client	
-2	lpwd	                      Display the current directory of the client	
-3	dir	                        Display the file names under the current directory of server that is serving the client	
-4	ldir	                      Display the file names under the current directory of client 	
-5	cd <directory_pathname>	    Change current directory of server that is serving the client	Support “.” and “..” notations
-6	lcd <directory_pathname>	  Change the current directory of client	Support “.” and “..” notations
-7	get <filename>	            Download named file from current directory of remote server and save it in the current directory of client	
-8	put <filename>	            Upload named file from current directory of client to the current directory of remote server	
-9	quit	                      Terminates the myftp session	
+##	Command Name	              Description	Requirements
+- 1	pwd	                        Display the current directory of server that is serving the client	
+
+- 2	lpwd	                      Display the current directory of the client	
+
+- 3	dir	                        Display the file names under the current directory of server that is serving the client	
+
+- 4	ldir	                      Display the file names under the current directory of client 	
+
+- 5	cd <directory_pathname>	    Change current directory of server that is serving the client	Support “.” and “..” notations
+
+- 6	lcd <directory_pathname>	  Change the current directory of client	Support “.” and “..” notations
+
+- 7	get <filename>	            Download named file from current directory of remote server and save it in the current directory of client	
+  
+- 8	put <filename>	            Upload named file from current directory of client to the current directory of remote server	
+  
+- 9	quit	                      Terminates the myftp session	
